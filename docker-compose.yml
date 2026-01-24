@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://backend:8000/api
+    depends_on:
+      - backend
+    networks:
+      - task-list-network
+
+  backend:
+    # Assuming backend is in a separate directory
+    # Adjust this based on your backend setup
+    image: your-backend-image:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=your-database-url
+    networks:
+      - task-list-network
+
+networks:
+  task-list-network:
+    driver: bridge
