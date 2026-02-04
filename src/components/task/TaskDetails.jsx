@@ -1,58 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, Button, Badge, Dropdown, Row, Col } from 'react-bootstrap';
-import { Calendar, Flag, User, Clock, X, GitMerge, UserPlus, ChevronDown, Edit } from 'lucide-react';
+import { Calendar, MapPin, Phone, Mail, Globe, Truck, X, ChevronDown, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import CommentSection from './CommentSection';
 import ApiService from '../../services/ApiService';
 
-const priorityColors = {
-    niski: 'bg-info bg-opacity-10 text-info border-info',
-    średni: 'bg-warning bg-opacity-10 text-warning border-warning',
-    wysoki: 'bg-danger bg-opacity-10 text-danger border-danger',
-};
-
+// Status names from Swagger: pending, in_progress, completed, cancelled
 const statusLabels = {
-    do_zrobienia: 'Do zrobienia',
-    w_trakcie: 'W trakcie',
-    zrobione: 'Zrobione'
+    pending: 'Oczekujące',
+    in_progress: 'W trakcie',
+    completed: 'Zakończone',
+    cancelled: 'Anulowane'
 };
 
-const formatTime = (seconds) => {
-    if (!seconds) return "00:00:00";
-    const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
-    const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-    return `${h}:${m}:${s}`;
+const statusColors = {
+    pending: 'warning',
+    in_progress: 'primary',
+    completed: 'success',
+    cancelled: 'secondary'
 };
 
-export default function TaskDetails({ task, comments, onCommentAdded, onClose, onEdit, onUpdate }) {
-    const [users, setUsers] = useState([]);
-
-    useEffect(() => {
-        async function fetchUsers() {
-            try {
-                const userList = await ApiService.getUsers();
-                setUsers(userList || []);
-            } catch (error) {
-                console.error("Failed to fetch users", error);
-            }
+export default function TaskDetails({ task, onClose, onEdit, onUpdate }) {
+    const handleStatusChange = async (newStatus) => {
+        try {
+            // Use the dedicated PATCH endpoint for status updates
+            await ApiService.updateTaskStatus(task.id, newStatus);
+            onUpdate(task.id, { status: newStatus });
+        } catch (error) {
+            console.error('Error updating status:', error);
         }
-        fetchUsers();
-    }, []);
-
-    const handleStatusChange = (newStatus) => {
-        onUpdate(task.id, { status: newStatus });
-    };
-
-    const handleAssignUser = (userEmail) => {
-        onUpdate(task.id, { assigned_to: userEmail });
     };
 
     if (!task) {
         return (
             <div className="d-flex flex-column align-items-center justify-content-center h-100 bg-light text-muted p-5 rounded border-2 border-dashed">
-                <p>Wybierz zadanie z listy, aby zobaczyć szczegóły i komentarze.</p>
+                <p>Wybierz zadanie z listy, aby zobaczyć szczegóły.</p>
             </div>
         );
     }
@@ -66,17 +48,18 @@ export default function TaskDetails({ task, comments, onCommentAdded, onClose, o
                         <Dropdown>
                             <Dropdown.Toggle 
                                 as={Badge} 
-                                bg={task.status === 'zrobione' ? 'success' : 'secondary'}
+                                bg={statusColors[task.status] || 'secondary'}
                                 className="cursor-pointer d-flex align-items-center gap-1 border-0"
                                 style={{ cursor: 'pointer', padding: '0.5rem 0.8rem' }}
                             >
-                                {statusLabels[task.status] || task.status}
+                                {statusLabels[task.status] || task.status || 'Oczekujące'}
                                 <ChevronDown size={12} />
                             </Dropdown.Toggle>
                             <Dropdown.Menu align="end">
-                                <Dropdown.Item onClick={() => handleStatusChange('do_zrobienia')}>Do zrobienia</Dropdown.Item>
-                                <Dropdown.Item onClick={() => handleStatusChange('w_trakcie')}>W trakcie</Dropdown.Item>
-                                <Dropdown.Item onClick={() => handleStatusChange('zrobione')}>Zrobione</Dropdown.Item>
+                                <Dropdown.Item onClick={() => handleStatusChange('pending')}>Oczekujące</Dropdown.Item>
+                                <Dropdown.Item onClick={() => handleStatusChange('in_progress')}>W trakcie</Dropdown.Item>
+                                <Dropdown.Item onClick={() => handleStatusChange('completed')}>Zakończone</Dropdown.Item>
+                                <Dropdown.Item onClick={() => handleStatusChange('cancelled')}>Anulowane</Dropdown.Item>
                             </Dropdown.Menu>
                         </Dropdown>
                         
@@ -90,6 +73,7 @@ export default function TaskDetails({ task, comments, onCommentAdded, onClose, o
                 </div>
             </Card.Header>
             <Card.Body className="p-4" style={{ overflowY: 'auto' }}>
+                {/* Description */}
                 <div className="mb-4">
                     <h6 className="text-uppercase text-muted extra-small fw-bold mb-2">Opis</h6>
                     <p className="text-dark mb-0" style={{ whiteSpace: 'pre-wrap' }}>
@@ -97,7 +81,24 @@ export default function TaskDetails({ task, comments, onCommentAdded, onClose, o
                     </p>
                 </div>
 
+                {/* Task details grid */}
                 <Row className="g-3 mb-4">
+                    {/* Website URL */}
+                    {task.website_url && (
+                        <Col sm={6}>
+                            <div className="d-flex align-items-center gap-2">
+                                <Globe size={16} className="text-muted" />
+                                <div className="text-break">
+                                    <div className="extra-small text-muted text-uppercase fw-bold">Strona</div>
+                                    <a href={task.website_url} target="_blank" rel="noopener noreferrer" className="small text-primary text-decoration-none">
+                                        {task.website_url}
+                                    </a>
+                                </div>
+                            </div>
+                        </Col>
+                    )}
+
+                    {/* Due Date */}
                     <Col sm={6}>
                         <div className="d-flex align-items-center gap-2">
                             <Calendar size={16} className="text-muted" />
@@ -109,70 +110,77 @@ export default function TaskDetails({ task, comments, onCommentAdded, onClose, o
                             </div>
                         </div>
                     </Col>
-                    <Col sm={6}>
-                        <div className="d-flex align-items-center gap-2">
-                            <Flag size={16} className="text-muted" />
-                            <div>
-                                <div className="extra-small text-muted text-uppercase fw-bold">Priorytet</div>
-                                <Badge className={`${priorityColors[task.priority || 'średni']} border-1`}>
-                                    {task.priority || 'średni'}
-                                </Badge>
-                            </div>
-                        </div>
-                    </Col>
-                    <Col sm={6}>
-                        <div className="d-flex align-items-center gap-2">
-                            <User size={16} className="text-muted" />
-                            <div className="flex-grow-1">
-                                <div className="extra-small text-muted text-uppercase fw-bold">Przypisano</div>
-                                <div className="d-flex align-items-center gap-2">
-                                    <span className="small">{task.assigned_to || 'Nie przypisano'}</span>
-                                    <Dropdown className="d-inline">
-                                        <Dropdown.Toggle as="button" className="btn btn-link p-0 text-muted h-auto">
-                                            <UserPlus size={14} />
-                                        </Dropdown.Toggle>
-                                        <Dropdown.Menu>
-                                            <Dropdown.Item onClick={() => handleAssignUser('')}>Brak przypisania</Dropdown.Item>
-                                            {users.map(user => (
-                                                <Dropdown.Item key={user.id} onClick={() => handleAssignUser(user.email)}>
-                                                    {user.full_name || user.email}
-                                                </Dropdown.Item>
-                                            ))}
-                                        </Dropdown.Menu>
-                                    </Dropdown>
+
+                    {/* Address */}
+                    {task.address && (
+                        <Col sm={6}>
+                            <div className="d-flex align-items-center gap-2">
+                                <MapPin size={16} className="text-muted" />
+                                <div>
+                                    <div className="extra-small text-muted text-uppercase fw-bold">Adres</div>
+                                    <div className="small">{task.address}</div>
                                 </div>
                             </div>
-                        </div>
-                    </Col>
-                    <Col sm={6}>
-                        <div className="d-flex align-items-center gap-2">
-                            <Clock size={16} className="text-muted" />
-                            <div>
-                                <div className="extra-small text-muted text-uppercase fw-bold">Czas pracy</div>
-                                <div className="small fw-bold text-primary">{formatTime(task.time_tracked)}</div>
+                        </Col>
+                    )}
+
+                    {/* Delivery Address */}
+                    {task.delivery_address && (
+                        <Col sm={6}>
+                            <div className="d-flex align-items-center gap-2">
+                                <Truck size={16} className="text-muted" />
+                                <div>
+                                    <div className="extra-small text-muted text-uppercase fw-bold">Adres dostawy</div>
+                                    <div className="small">{task.delivery_address}</div>
+                                </div>
                             </div>
-                        </div>
-                    </Col>
-                    {task.github_mr_url && (
-                        <Col xs={12}>
-                            <div className="d-flex align-items-start gap-2 pt-2 border-top border-light">
-                                <GitMerge size={16} className="text-muted mt-1" />
-                                <div className="text-break">
-                                    <div className="extra-small text-muted text-uppercase fw-bold">Merge Request</div>
-                                    <a href={task.github_mr_url} target="_blank" rel="noopener noreferrer" className="small text-primary text-decoration-none">
-                                        {task.github_mr_url}
-                                    </a>
+                        </Col>
+                    )}
+
+                    {/* Phone */}
+                    {task.phone && (
+                        <Col sm={6}>
+                            <div className="d-flex align-items-center gap-2">
+                                <Phone size={16} className="text-muted" />
+                                <div>
+                                    <div className="extra-small text-muted text-uppercase fw-bold">Telefon</div>
+                                    <a href={`tel:${task.phone}`} className="small text-decoration-none">{task.phone}</a>
+                                </div>
+                            </div>
+                        </Col>
+                    )}
+
+                    {/* Email */}
+                    {task.email && (
+                        <Col sm={6}>
+                            <div className="d-flex align-items-center gap-2">
+                                <Mail size={16} className="text-muted" />
+                                <div>
+                                    <div className="extra-small text-muted text-uppercase fw-bold">Email</div>
+                                    <a href={`mailto:${task.email}`} className="small text-decoration-none">{task.email}</a>
                                 </div>
                             </div>
                         </Col>
                     )}
                 </Row>
 
-                <CommentSection 
-                    taskId={task.id} 
-                    comments={comments} 
-                    onCommentAdded={onCommentAdded} 
-                />
+                {/* Timestamps */}
+                {(task.created_at || task.updated_at) && (
+                    <div className="border-top pt-3 mt-3">
+                        <Row className="g-2 text-muted small">
+                            {task.created_at && (
+                                <Col sm={6}>
+                                    <span className="fw-bold">Utworzono:</span> {format(new Date(task.created_at), 'd MMM yyyy, HH:mm', { locale: pl })}
+                                </Col>
+                            )}
+                            {task.updated_at && (
+                                <Col sm={6}>
+                                    <span className="fw-bold">Zaktualizowano:</span> {format(new Date(task.updated_at), 'd MMM yyyy, HH:mm', { locale: pl })}
+                                </Col>
+                            )}
+                        </Row>
+                    </div>
+                )}
             </Card.Body>
         </Card>
     );

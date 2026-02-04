@@ -5,52 +5,63 @@ import ApiService from '../services/ApiService';
 
 export default function AddTaskApiTask({ onTaskAdded }) {
     const [show, setShow] = useState(false);
-    const [formType, setFormType] = useState('dane_kontaktowe');
-    const [title, setTitle] = useState('');
-    const [sourceUrl, setSourceUrl] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formData, setFormData] = useState({
+        title: '',
+        website_url: '',
+        description: '',
+        address: '',
+        phone: '',
+        email: '',
+        due_date: '',
+        delivery_address: ''
+    });
 
     const handleClose = () => {
         setShow(false);
-        setTitle('');
-        setSourceUrl('');
-        setFormType('dane_kontaktowe');
+        setFormData({
+            title: '',
+            website_url: '',
+            description: '',
+            address: '',
+            phone: '',
+            email: '',
+            due_date: '',
+            delivery_address: ''
+        });
     };
     
     const handleShow = () => setShow(true);
 
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
     const handleAddTask = async () => {
+        // Validate required fields
+        if (!formData.title || !formData.website_url || !formData.description || !formData.address) {
+            alert('Wypełnij wszystkie wymagane pola: Tytuł, URL strony, Opis, Adres');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            let formData = {};
-            
-            if (formType === 'formularz') {
-                formData = {
-                    imie: { label: 'Imię', type: 'text', required: true, placeholder: 'Wpisz imię' },
-                    email: { label: 'Email', type: 'email', required: true, placeholder: 'email@example.com' },
-                    wiadomosc: { label: 'Wiadomość', type: 'textarea', required: true, placeholder: 'Twoja wiadomość...' },
-                    telefon: { label: 'Telefon', type: 'tel', required: false, placeholder: '+48 123 456 789' }
-                };
-            } else {
-                formData = {
-                    imie_nazwisko: 'Jan Kowalski',
-                    email: 'jan.kowalski@example.com',
-                    telefon: '+48 123 456 789',
-                    firma: 'Example Corp',
-                    wiadomosc: 'Proszę o kontakt w sprawie współpracy'
-                };
-            }
-
+            // Build payload with only non-empty fields
             const taskPayload = {
-                title: title || `Nowe zapytanie ${formType === 'formularz' ? '(formularz)' : '(kontakt)'}`,
-                source_url: sourceUrl || 'https://example.com/kontakt',
-                status: 'nowe',
-                form_type: formType,
-                form_data: formData
+                title: formData.title,
+                website_url: formData.website_url,
+                description: formData.description,
+                address: formData.address
             };
 
-            // Using our ApiService instead of base44Client
-            const newTask = await ApiService.createApiTask(taskPayload);
+            // Add optional fields if provided
+            if (formData.phone) taskPayload.phone = formData.phone;
+            if (formData.email) taskPayload.email = formData.email;
+            if (formData.due_date) taskPayload.due_date = formData.due_date;
+            if (formData.delivery_address) taskPayload.delivery_address = formData.delivery_address;
+
+            const newTask = await ApiService.createTask(taskPayload);
 
             if (onTaskAdded) {
                 onTaskAdded(newTask);
@@ -58,8 +69,9 @@ export default function AddTaskApiTask({ onTaskAdded }) {
             
             handleClose();
         } catch (error) {
-            console.error('Error adding API task:', error);
-            alert('Wystąpił błąd podczas dodawania zadania API.');
+            console.error('Error adding task:', error);
+            const errorMsg = error.response?.data?.message || 'Wystąpił błąd podczas dodawania zadania.';
+            alert(errorMsg);
         } finally {
             setIsSubmitting(false);
         }
@@ -69,45 +81,119 @@ export default function AddTaskApiTask({ onTaskAdded }) {
         <>
             <Button variant="outline-primary" size="sm" onClick={handleShow} className="d-flex align-items-center gap-2">
                 <Plus size={16} />
-                Dodaj testowe zadanie API
+                Dodaj nowe zadanie
             </Button>
 
-            <Modal show={show} onHide={handleClose} centered>
+            <Modal show={show} onHide={handleClose} centered size="lg">
                 <Modal.Header closeButton>
-                    <Modal.Title>Symuluj nowe zadanie z API</Modal.Title>
+                    <Modal.Title>Dodaj nowe zadanie</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <Form>
                         <Form.Group className="mb-3">
-                            <Form.Label>Tytuł zadania</Form.Label>
+                            <Form.Label>Tytuł zadania <span className="text-danger">*</span></Form.Label>
                             <Form.Control 
                                 type="text"
-                                placeholder="np. Zapytanie ofertowe" 
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
+                                name="title"
+                                placeholder="np. Naprawa błędu na stronie" 
+                                value={formData.title}
+                                onChange={handleChange}
+                                required
                             />
                         </Form.Group>
                         
                         <Form.Group className="mb-3">
-                            <Form.Label>Adres źródłowy</Form.Label>
+                            <Form.Label>URL strony <span className="text-danger">*</span></Form.Label>
                             <Form.Control 
                                 type="url"
-                                placeholder="https://example.com/kontakt" 
-                                value={sourceUrl}
-                                onChange={(e) => setSourceUrl(e.target.value)}
+                                name="website_url"
+                                placeholder="https://example.com" 
+                                value={formData.website_url}
+                                onChange={handleChange}
+                                required
                             />
                         </Form.Group>
-                        
+
                         <Form.Group className="mb-3">
-                            <Form.Label>Typ danych</Form.Label>
-                            <Form.Select 
-                                value={formType} 
-                                onChange={(e) => setFormType(e.target.value)}
-                            >
-                                <option value="dane_kontaktowe">Dane kontaktowe (tylko odczyt)</option>
-                                <option value="formularz">Formularz do wypełnienia</option>
-                            </Form.Select>
+                            <Form.Label>Opis <span className="text-danger">*</span></Form.Label>
+                            <Form.Control 
+                                as="textarea"
+                                rows={3}
+                                name="description"
+                                placeholder="Szczegółowy opis zadania..." 
+                                value={formData.description}
+                                onChange={handleChange}
+                                required
+                            />
                         </Form.Group>
+
+                        <Form.Group className="mb-3">
+                            <Form.Label>Adres <span className="text-danger">*</span></Form.Label>
+                            <Form.Control 
+                                type="text"
+                                name="address"
+                                placeholder="ul. Przykładowa 123, Warszawa" 
+                                value={formData.address}
+                                onChange={handleChange}
+                                required
+                            />
+                        </Form.Group>
+
+                        <hr />
+                        <p className="text-muted small">Pola opcjonalne</p>
+
+                        <div className="row">
+                            <div className="col-md-6">
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Telefon</Form.Label>
+                                    <Form.Control 
+                                        type="tel"
+                                        name="phone"
+                                        placeholder="+48 123 456 789" 
+                                        value={formData.phone}
+                                        onChange={handleChange}
+                                    />
+                                </Form.Group>
+                            </div>
+                            <div className="col-md-6">
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Email</Form.Label>
+                                    <Form.Control 
+                                        type="email"
+                                        name="email"
+                                        placeholder="kontakt@example.com" 
+                                        value={formData.email}
+                                        onChange={handleChange}
+                                    />
+                                </Form.Group>
+                            </div>
+                        </div>
+
+                        <div className="row">
+                            <div className="col-md-6">
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Termin wykonania</Form.Label>
+                                    <Form.Control 
+                                        type="date"
+                                        name="due_date"
+                                        value={formData.due_date}
+                                        onChange={handleChange}
+                                    />
+                                </Form.Group>
+                            </div>
+                            <div className="col-md-6">
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Adres dostawy</Form.Label>
+                                    <Form.Control 
+                                        type="text"
+                                        name="delivery_address"
+                                        placeholder="ul. Dostawy 456, Kraków" 
+                                        value={formData.delivery_address}
+                                        onChange={handleChange}
+                                    />
+                                </Form.Group>
+                            </div>
+                        </div>
                     </Form>
                 </Modal.Body>
                 <Modal.Footer>

@@ -1,79 +1,54 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { Button, Card } from 'react-bootstrap';
-import { Play, Pause, Calendar, Trash2, Check, Clock } from 'lucide-react';
+import { Calendar, Trash2, Check, MapPin, Globe } from 'lucide-react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import ApiService from '../../services/ApiService';
 
-const priorityColors = {
-    niski: 'border-primary',
-    średni: 'border-warning',
-    wysoki: 'border-danger',
-};
-
-const formatTime = (seconds) => {
-    if (isNaN(seconds) || seconds < 0) return "00:00:00";
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+// Status colors based on Swagger status values
+const statusColors = {
+    pending: 'border-warning',
+    in_progress: 'border-primary',
+    completed: 'border-success',
+    cancelled: 'border-secondary',
 };
 
 export default function TaskItem({ task, isSelected, onSelect, onUpdate, onDelete }) {
-    const [isTiming, setIsTiming] = useState(false);
-    const [elapsedTime, setElapsedTime] = useState(0);
-    const intervalRef = useRef(null);
-
-    useEffect(() => {
-        return () => {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        };
-    }, []);
-
-    const handleToggleTimer = (e) => {
+    const handleMarkAsDone = async (e) => {
         e.stopPropagation();
-        if (isTiming) { // Pauzowanie
-            clearInterval(intervalRef.current);
-            const newTotalTime = (task.time_tracked || 0) + elapsedTime;
-            onUpdate(task.id, { time_tracked: newTotalTime });
-            setElapsedTime(0);
-            setIsTiming(false);
-        } else { // Startowanie
-            if (task.status === 'do_zrobienia') {
-                onUpdate(task.id, { status: 'w_trakcie' });
+        try {
+            await ApiService.updateTaskStatus(task.id, 'completed');
+            onUpdate(task.id, { status: 'completed' });
+        } catch (error) {
+            console.error('Error marking task as done:', error);
+        }
+    };
+
+    const handleStartProgress = async (e) => {
+        e.stopPropagation();
+        if (task.status === 'pending') {
+            try {
+                await ApiService.updateTaskStatus(task.id, 'in_progress');
+                onUpdate(task.id, { status: 'in_progress' });
+            } catch (error) {
+                console.error('Error starting task:', error);
             }
-            setIsTiming(true);
-            intervalRef.current = setInterval(() => {
-                setElapsedTime(prev => prev + 1);
-            }, 1000);
         }
     };
 
-    const handleMarkAsDone = (e) => {
-        e.stopPropagation();
-        if(isTiming) {
-            clearInterval(intervalRef.current);
-            const newTotalTime = (task.time_tracked || 0) + elapsedTime;
-            onUpdate(task.id, { status: 'zrobione', time_tracked: newTotalTime });
-            setElapsedTime(0);
-            setIsTiming(false);
-        } else {
-            onUpdate(task.id, { status: 'zrobione' });
-        }
-    };
-
-    const isDone = task.status === 'zrobione';
-    const totalTrackedTime = (task.time_tracked || 0) + elapsedTime;
+    const isDone = task.status === 'completed';
+    const isCancelled = task.status === 'cancelled';
 
     return (
         <Card
             onClick={() => onSelect && onSelect(task)}
-            className={`mb-2 border-0 border-start border-4 shadow-sm task-item-card ${priorityColors[task.priority || 'średni']} ${isSelected ? 'bg-primary bg-opacity-10' : 'bg-white'}`}
+            className={`mb-2 border-0 border-start border-4 shadow-sm task-item-card ${statusColors[task.status] || 'border-warning'} ${isSelected ? 'bg-primary bg-opacity-10' : 'bg-white'}`}
             style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
         >
             <Card.Body className="p-3">
                 <div className="d-flex align-items-center">
                     <div className="flex-grow-1 min-w-0">
-                        <p className={`mb-0 fw-bold text-truncate ${isDone ? 'text-decoration-line-through text-muted' : 'text-dark'}`}>
+                        <p className={`mb-0 fw-bold text-truncate ${isDone || isCancelled ? 'text-decoration-line-through text-muted' : 'text-dark'}`}>
                             {task.title}
                         </p>
                         <div className="d-flex align-items-center gap-3 mt-1 text-muted small" style={{ fontSize: '0.75rem' }}>
@@ -83,34 +58,36 @@ export default function TaskItem({ task, isSelected, onSelect, onUpdate, onDelet
                                     <span>{format(new Date(task.due_date), 'd MMM', { locale: pl })}</span>
                                 </div>
                             )}
-                            <div className="d-flex align-items-center gap-1">
-                                <Clock size={12} />
-                                <span className={isTiming ? 'text-primary fw-bold' : ''}>
-                                    {formatTime(totalTrackedTime)}
-                                </span>
-                            </div>
-                            {task.assigned_to && (
+                            {task.website_url && (
                                 <div className="d-flex align-items-center gap-1">
-                                    <div className="rounded-circle bg-secondary bg-opacity-25 d-flex align-items-center justify-content-center" style={{ width: '16px', height: '16px', fontSize: '10px' }}>
-                                        {task.assigned_to[0].toUpperCase()}
-                                    </div>
-                                    <span>{task.assigned_to}</span>
+                                    <Globe size={12} />
+                                    <span className="text-truncate" style={{ maxWidth: '100px' }}>
+                                        {new URL(task.website_url).hostname}
+                                    </span>
+                                </div>
+                            )}
+                            {task.address && (
+                                <div className="d-flex align-items-center gap-1">
+                                    <MapPin size={12} />
+                                    <span className="text-truncate" style={{ maxWidth: '100px' }}>{task.address}</span>
                                 </div>
                             )}
                         </div>
                     </div>
                     
                     <div className="d-flex align-items-center gap-1 ms-2">
-                        {!isDone && (
+                        {!isDone && !isCancelled && (
                             <>
-                                <Button 
-                                    variant="link" 
-                                    className="p-1 text-decoration-none" 
-                                    onClick={handleToggleTimer}
-                                    title={isTiming ? "Pauza" : "Start"}
-                                >
-                                    {isTiming ? <Pause size={18} className="text-warning" /> : <Play size={18} className="text-success" />}
-                                </Button>
+                                {task.status === 'pending' && (
+                                    <Button 
+                                        variant="link" 
+                                        className="p-1 text-decoration-none" 
+                                        onClick={handleStartProgress}
+                                        title="Rozpocznij"
+                                    >
+                                        <span className="badge bg-primary">Start</span>
+                                    </Button>
+                                )}
                                 <Button 
                                     variant="link" 
                                     className="p-1 text-decoration-none" 
