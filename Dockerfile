@@ -9,7 +9,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production=false
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -30,11 +30,11 @@ RUN npm run build
 # ================================
 FROM nginx:alpine AS production
 
-# Copy built files from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy built files from builder stage to /task-list/ subdirectory
+COPY --from=builder /app/dist /usr/share/nginx/html/task-list
 
 # Copy custom nginx config
-COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY default.conf /etc/nginx/conf.d/default.conf
 
 # Expose port
 EXPOSE 80

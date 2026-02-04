@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // Configure the base URL for the backend API
-const API_BASE_URL = import.meta.env.VITE_API_URL || process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+// Endpoints include /v1/ prefix, so base URL should be /api without version
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,11 +11,10 @@ const api = axios.create({
   },
 });
 
-// Request interceptor for adding auth tokens if needed
+// Request interceptor for adding auth tokens
 api.interceptors.request.use(
   (config) => {
-    // Add auth token from environment variable
-    const token = import.meta.env.VITE_JWT_TOKEN || process.env.REACT_APP_JWT_TOKEN;
+    const token = import.meta.env.VITE_JWT_TOKEN;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
