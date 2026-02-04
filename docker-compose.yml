@@ -1,0 +1,40 @@
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/node/Dockerfile
+      target: production
+      args:
+        # Vite variables must be passed at BUILD time (not runtime!)
+        - VITE_API_URL=${VITE_API_URL:-https://app.softwellhouse.pl/api}
+        - VITE_JWT_TOKEN=${VITE_JWT_TOKEN:-}
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    labels:
+      - "com.github.nginx-proxy.nginx-proxy.enable=true"
+      - "com.github.nginx-proxy.nginx-proxy.virtual_host=task-list.softwellhouse.pl"
+      - "com.github.nginx-proxy.nginx-proxy.virtual_port=80"
+    networks:
+      - proxy-network
+
+  # Development service (optional)
+  frontend-dev:
+    build:
+      context: ..
+      dockerfile: docker/node/Dockerfile
+      target: development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../src:/app/src:ro
+      - ../index.html:/app/index.html:ro
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000/api}
+      - VITE_JWT_TOKEN=${VITE_JWT_TOKEN:-}
+    profiles:
+      - dev
+
+networks:
+  proxy-network:
+    external: true
