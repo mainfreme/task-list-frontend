@@ -3,6 +3,7 @@ import axios from 'axios';
 // Configure the base URL for the backend API
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -13,8 +14,8 @@ const api = axios.create({
 // Request interceptor for adding auth tokens if needed
 api.interceptors.request.use(
   (config) => {
-    // Add auth token if available
-    const token = localStorage.getItem('authToken');
+    // Add auth token from environment variable
+    const token = import.meta.env.VITE_JWT_TOKEN || process.env.REACT_APP_JWT_TOKEN;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,8 +32,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Handle unauthorized access
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+      console.error('Unauthorized access - check JWT token in .env file');
+      // Note: Token is now from .env, so no need to remove from localStorage
     }
     return Promise.reject(error);
   }
@@ -68,7 +69,7 @@ const ApiService = {
   // Zadania API (Simulation of external API tasks)
   async getApiTasks() {
     try {
-      const response = await api.get('api/v1//tasks?is_api_task=true');
+      const response = await api.get('/tasks?is_api_task=true');
       return response.data;
     } catch (error) {
       console.error('Error fetching API tasks:', error);

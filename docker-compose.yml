@@ -4,7 +4,17 @@ services:
   frontend:
     build: .
     environment:
-      - REACT_APP_API_URL=http://backend:8000/api
+      # Backend URL - choose one option:
+      # Option 1: If backend is only internal (no nginx-proxy):
+      # - REACT_APP_API_URL=http://backend:8000/api
+      # Option 2: If backend is accessible via nginx-proxy with domain:
+      # - REACT_APP_API_URL=https://api.task-list.local/api
+      # Option 3: If frontend and backend are on same domain:
+      # - REACT_APP_API_URL=/api
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://backend:8000/api}
+      # JWT Token for API authentication
+      - VITE_JWT_TOKEN=${VITE_JWT_TOKEN:-}
+      - REACT_APP_JWT_TOKEN=${REACT_APP_JWT_TOKEN:-}
     depends_on:
       - backend
     labels:
