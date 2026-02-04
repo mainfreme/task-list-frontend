@@ -2,7 +2,7 @@ services:
   frontend:
     build:
       context: ..
-      dockerfile: docker/node/Dockerfile
+      dockerfile: ./Dockerfile
       target: production
       args:
         # Vite variables must be passed at BUILD time (not runtime!)
@@ -22,7 +22,7 @@ services:
   frontend-dev:
     build:
       context: ..
-      dockerfile: docker/node/Dockerfile
+      dockerfile: ./Dockerfile
       target: development
     ports:
       - "5173:5173"
