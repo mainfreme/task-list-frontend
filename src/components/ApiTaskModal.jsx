@@ -1,91 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Button, Form } from 'react-bootstrap';
-import { ExternalLink, CheckCircle } from 'lucide-react';
+import React from 'react';
+import { Modal, Button, Row, Col } from 'react-bootstrap';
+import { ExternalLink, CheckCircle, MapPin, Phone, Mail, Calendar, Truck } from 'lucide-react';
+import { format } from 'date-fns';
+import { pl } from 'date-fns/locale';
 import Badge from './common/Badge';
 
+// Status config based on Swagger: pending, in_progress, completed, cancelled
+const statusConfig = {
+    pending: { color: 'warning', label: 'Oczekujące' },
+    in_progress: { color: 'primary', label: 'W trakcie' },
+    completed: { color: 'success', label: 'Zakończone' },
+    cancelled: { color: 'secondary', label: 'Anulowane' }
+};
+
 export default function ApiTaskModal({ task, show, onClose, onStatusChange }) {
-    const [formResponses, setFormResponses] = useState({});
-
-    // Reset form responses when task changes
-    useEffect(() => {
-        setFormResponses({});
-    }, [task?.id]);
-
     if (!task) return null;
 
-    const handleInputChange = (field, value) => {
-        setFormResponses(prev => ({ ...prev, [field]: value }));
-    };
-
     const handleComplete = () => {
-        onStatusChange(task.id, 'zakonczone', formResponses);
+        onStatusChange(task.id, 'completed');
         onClose();
     };
 
-    const handleMarkAsRead = () => {
-        onStatusChange(task.id, 'przeczytane');
+    const handleMarkAsInProgress = () => {
+        onStatusChange(task.id, 'in_progress');
     };
 
-    const renderFormData = () => {
-        if (!task.form_data) return <p className="text-muted">Brak danych</p>;
-
-        if (task.form_type === 'formularz') {
-            // Renderowanie dynamicznego formularza
-            return (
-                <div className="space-y-4">
-                    <p className="text-sm text-muted mb-3 small">Wypełnij poniższy formularz:</p>
-                    {Object.entries(task.form_data).map(([key, config]) => (
-                        <Form.Group key={key} className="mb-3">
-                            <Form.Label className="small fw-bold">
-                                {config.label || key}
-                                {config.required && <span className="text-danger ms-1">*</span>}
-                            </Form.Label>
-                            {config.type === 'textarea' ? (
-                                <Form.Control
-                                    as="textarea"
-                                    id={key}
-                                    placeholder={config.placeholder || ''}
-                                    value={formResponses[key] || ''}
-                                    onChange={(e) => handleInputChange(key, e.target.value)}
-                                    rows={3}
-                                />
-                            ) : (
-                                <Form.Control
-                                    type={config.type || 'text'}
-                                    id={key}
-                                    placeholder={config.placeholder || ''}
-                                    value={formResponses[key] || ''}
-                                    onChange={(e) => handleInputChange(key, e.target.value)}
-                                />
-                            )}
-                            {config.description && (
-                                <Form.Text className="text-muted extra-small d-block mt-1">
-                                    {config.description}
-                                </Form.Text>
-                            )}
-                        </Form.Group>
-                    ))}
-                </div>
-            );
-        } else {
-            // Renderowanie danych kontaktowych
-            return (
-                <div className="contact-data-list">
-                    <p className="small fw-bold text-muted mb-3 text-uppercase">Dane kontaktowe:</p>
-                    {Object.entries(task.form_data).map(([key, value]) => (
-                        <div key={key} className="d-flex align-items-center border-bottom border-light py-2">
-                            <span className="text-muted small fw-medium" style={{ minWidth: '140px', textTransform: 'capitalize' }}>
-                                {key.replace(/_/g, ' ')}:
-                            </span>
-                            <span className="text-dark fw-medium ms-2">
-                                {typeof value === 'object' ? JSON.stringify(value) : value}
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            );
-        }
+    const handleCancel = () => {
+        onStatusChange(task.id, 'cancelled');
+        onClose();
     };
+
+    const currentStatus = statusConfig[task.status] || statusConfig.pending;
 
     return (
         <Modal show={show} onHide={onClose} size="lg" centered>
@@ -93,43 +38,138 @@ export default function ApiTaskModal({ task, show, onClose, onStatusChange }) {
                 <Modal.Title className="w-100">
                     <div className="d-flex justify-content-between align-items-start mb-1">
                         <span className="h4 mb-0 fw-bold">{task.title}</span>
-                        <Badge color={task.status === 'nowe' ? 'danger' : task.status === 'zakonczone' ? 'success' : 'warning'} pill>
-                            {task.status}
+                        <Badge color={currentStatus.color} pill>
+                            {currentStatus.label}
                         </Badge>
                     </div>
-                    <a 
-                        href={task.source_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-decoration-none text-primary small d-flex align-items-center gap-1"
-                        style={{ fontSize: '0.85rem' }}
-                    >
-                        <ExternalLink size={12} />
-                        {task.source_url}
-                    </a>
+                    {task.website_url && (
+                        <a 
+                            href={task.website_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-decoration-none text-primary small d-flex align-items-center gap-1"
+                            style={{ fontSize: '0.85rem' }}
+                        >
+                            <ExternalLink size={12} />
+                            {task.website_url}
+                        </a>
+                    )}
                 </Modal.Title>
             </Modal.Header>
             
             <Modal.Body className="py-4" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                {renderFormData()}
+                {/* Description */}
+                {task.description && (
+                    <div className="mb-4">
+                        <h6 className="text-muted text-uppercase small fw-bold mb-2">Opis</h6>
+                        <p className="mb-0" style={{ whiteSpace: 'pre-wrap' }}>{task.description}</p>
+                    </div>
+                )}
+
+                {/* Task details */}
+                <Row className="g-3">
+                    {task.address && (
+                        <Col md={6}>
+                            <div className="d-flex align-items-start gap-2">
+                                <MapPin size={16} className="text-muted mt-1" />
+                                <div>
+                                    <div className="text-muted text-uppercase small fw-bold">Adres</div>
+                                    <div>{task.address}</div>
+                                </div>
+                            </div>
+                        </Col>
+                    )}
+
+                    {task.delivery_address && (
+                        <Col md={6}>
+                            <div className="d-flex align-items-start gap-2">
+                                <Truck size={16} className="text-muted mt-1" />
+                                <div>
+                                    <div className="text-muted text-uppercase small fw-bold">Adres dostawy</div>
+                                    <div>{task.delivery_address}</div>
+                                </div>
+                            </div>
+                        </Col>
+                    )}
+
+                    {task.phone && (
+                        <Col md={6}>
+                            <div className="d-flex align-items-start gap-2">
+                                <Phone size={16} className="text-muted mt-1" />
+                                <div>
+                                    <div className="text-muted text-uppercase small fw-bold">Telefon</div>
+                                    <a href={`tel:${task.phone}`} className="text-decoration-none">{task.phone}</a>
+                                </div>
+                            </div>
+                        </Col>
+                    )}
+
+                    {task.email && (
+                        <Col md={6}>
+                            <div className="d-flex align-items-start gap-2">
+                                <Mail size={16} className="text-muted mt-1" />
+                                <div>
+                                    <div className="text-muted text-uppercase small fw-bold">Email</div>
+                                    <a href={`mailto:${task.email}`} className="text-decoration-none">{task.email}</a>
+                                </div>
+                            </div>
+                        </Col>
+                    )}
+
+                    {task.due_date && (
+                        <Col md={6}>
+                            <div className="d-flex align-items-start gap-2">
+                                <Calendar size={16} className="text-muted mt-1" />
+                                <div>
+                                    <div className="text-muted text-uppercase small fw-bold">Termin</div>
+                                    <div>{format(new Date(task.due_date), 'd MMMM yyyy', { locale: pl })}</div>
+                                </div>
+                            </div>
+                        </Col>
+                    )}
+                </Row>
+
+                {/* Timestamps */}
+                {(task.created_at || task.updated_at) && (
+                    <div className="border-top mt-4 pt-3">
+                        <Row className="g-2 text-muted small">
+                            {task.created_at && (
+                                <Col sm={6}>
+                                    <span className="fw-bold">Utworzono:</span> {format(new Date(task.created_at), 'd MMM yyyy, HH:mm', { locale: pl })}
+                                </Col>
+                            )}
+                            {task.updated_at && (
+                                <Col sm={6}>
+                                    <span className="fw-bold">Zaktualizowano:</span> {format(new Date(task.updated_at), 'd MMM yyyy, HH:mm', { locale: pl })}
+                                </Col>
+                            )}
+                        </Row>
+                    </div>
+                )}
             </Modal.Body>
 
             <Modal.Footer className="d-flex justify-content-between border-top pt-3">
-                <Button variant="outline-secondary" onClick={onClose}>
-                    Zamknij
-                </Button>
+                <div>
+                    <Button variant="outline-secondary" onClick={onClose}>
+                        Zamknij
+                    </Button>
+                </div>
                 <div className="d-flex gap-2">
-                    {task.status === 'nowe' && (
-                        <Button variant="light" className="text-primary border" onClick={handleMarkAsRead}>
-                            <CheckCircle size={18} className="me-2" />
-                            Oznacz jako przeczytane
+                    {task.status === 'pending' && (
+                        <Button variant="primary" onClick={handleMarkAsInProgress}>
+                            Rozpocznij
                         </Button>
                     )}
-                    {task.status !== 'zakonczone' && (
-                        <Button variant="success" onClick={handleComplete} className="d-flex align-items-center shadow-sm">
-                            <CheckCircle size={18} className="me-2" />
-                            Zakończ zadanie
-                        </Button>
+                    {task.status !== 'completed' && task.status !== 'cancelled' && (
+                        <>
+                            <Button variant="outline-danger" onClick={handleCancel}>
+                                Anuluj
+                            </Button>
+                            <Button variant="success" onClick={handleComplete} className="d-flex align-items-center">
+                                <CheckCircle size={18} className="me-2" />
+                                Zakończ
+                            </Button>
+                        </>
                     )}
                 </div>
             </Modal.Footer>

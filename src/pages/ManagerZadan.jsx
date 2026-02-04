@@ -11,7 +11,6 @@ import AlertMessage from '../components/common/AlertMessage';
 
 export default function ManagerZadan() {
     const [tasks, setTasks] = useState([]);
-    const [comments, setComments] = useState({});
     const [selectedTask, setSelectedTask] = useState(null);
     const [editingTask, setEditingTask] = useState(null);
     const [showForm, setShowForm] = useState(false);
@@ -25,8 +24,10 @@ export default function ManagerZadan() {
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const taskData = await ApiService.getTasks();
-            setTasks(taskData || []);
+            const response = await ApiService.getTasks();
+            // Handle both paginated response { data: [...] } and direct array
+            const taskData = response?.data || response || [];
+            setTasks(Array.isArray(taskData) ? taskData : []);
             setError(null);
         } catch (err) {
             setError('Błąd podczas pobierania zadań.');
@@ -36,20 +37,8 @@ export default function ManagerZadan() {
         }
     };
 
-    const loadCommentsForTask = async (taskId) => {
-        try {
-            const commentData = await ApiService.getComments(taskId);
-            setComments(prev => ({ ...prev, [taskId]: commentData || [] }));
-        } catch (err) {
-            console.error("Error loading comments:", err);
-        }
-    };
-
     const handleSelectTask = (task) => {
         setSelectedTask(task);
-        if (task && !comments[task.id]) {
-            loadCommentsForTask(task.id);
-        }
     };
 
     const handleUpdateTask = async (taskId, updates) => {
@@ -92,26 +81,16 @@ export default function ManagerZadan() {
         }
     };
 
-    const handleCommentAdded = async (taskId, commentData) => {
-        try {
-            const newComment = await ApiService.addComment(taskId, commentData);
-            setComments(prev => ({
-                ...prev,
-                [taskId]: [...(prev[taskId] || []), newComment]
-            }));
-        } catch (err) {
-            setError('Błąd podczas dodawania komentarza.');
-        }
-    };
-
     const openEditForm = (task) => {
         setEditingTask(task);
         setShowForm(true);
     };
 
-    const tasksToDo = tasks.filter(t => t.status === 'do_zrobienia' || (!t.status && t.completed === false));
-    const tasksInProgress = tasks.filter(t => t.status === 'w_trakcie');
-    const tasksDone = tasks.filter(t => t.status === 'zrobione' || t.completed === true);
+    // Status names from Swagger: pending, in_progress, completed, cancelled
+    const tasksToDo = tasks.filter(t => t.status === 'pending' || !t.status);
+    const tasksInProgress = tasks.filter(t => t.status === 'in_progress');
+    const tasksDone = tasks.filter(t => t.status === 'completed');
+    const tasksCancelled = tasks.filter(t => t.status === 'cancelled');
 
     if (isLoading) {
         return <LoadingSpinner message="Ładowanie zadań..." />;
@@ -238,8 +217,6 @@ export default function ManagerZadan() {
                             >
                                 <TaskDetails 
                                     task={selectedTask} 
-                                    comments={comments[selectedTask.id] || []}
-                                    onCommentAdded={handleCommentAdded}
                                     onClose={() => setSelectedTask(null)}
                                     onEdit={openEditForm}
                                     onUpdate={handleUpdateTask}

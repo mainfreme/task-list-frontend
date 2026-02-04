@@ -25,17 +25,10 @@ export default function ZadaniaApi() {
 
     const loadTasks = async () => {
         try {
-            // Using our ApiService instead of base44
-            const apiTasks = await ApiService.getApiTasks();
-            
-            // If empty (demo mode), let's keep current or show error
-            if (apiTasks && apiTasks.length > 0) {
-                setTasks(apiTasks);
-            } else if (tasks.length === 0) {
-                // Initial fallback for demo if no backend tasks
-                setTasks([]);
-            }
-            
+            const response = await ApiService.getTasks();
+            // Handle both paginated response { data: [...] } and direct array
+            const apiTasks = response?.data || response || [];
+            setTasks(Array.isArray(apiTasks) ? apiTasks : []);
             setLastCheck(new Date());
             setError(null);
         } catch (error) {
@@ -67,15 +60,11 @@ export default function ZadaniaApi() {
         setModalOpen(true);
     };
 
-    const handleStatusChange = async (taskId, newStatus, formResponses = null) => {
+    const handleStatusChange = async (taskId, newStatus) => {
         try {
-            const updateData = { status: newStatus };
-            if (formResponses) {
-                updateData.form_responses = formResponses;
-            }
-            
-            await ApiService.updateApiTask(taskId, updateData);
-            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updateData } : t));
+            // Use PATCH /v1/tasks/{id}/status endpoint
+            await ApiService.updateTaskStatus(taskId, newStatus);
+            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
             setModalOpen(false);
             setSelectedTask(null);
         } catch (error) {
@@ -96,9 +85,10 @@ export default function ZadaniaApi() {
         }
     };
 
-    const newTasksCount = tasks.filter(t => t.status === 'nowe').length;
-    const inProgressCount = tasks.filter(t => t.status === 'przeczytane').length;
-    const completedCount = tasks.filter(t => t.status === 'zakonczone').length;
+    // Status names from Swagger: pending, in_progress, completed, cancelled
+    const newTasksCount = tasks.filter(t => t.status === 'pending' || !t.status).length;
+    const inProgressCount = tasks.filter(t => t.status === 'in_progress').length;
+    const completedCount = tasks.filter(t => t.status === 'completed').length;
 
     return (
         <div className="container-fluid py-4 max-w-6xl mx-auto">
