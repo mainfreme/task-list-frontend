@@ -65,6 +65,30 @@ const ApiService = {
     return response.data;
   },
 
+  // Zadania API (Simulation of external API tasks)
+  async getApiTasks() {
+    try {
+      const response = await api.get('api/v1//tasks?is_api_task=true');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching API tasks:', error);
+      return [];
+    }
+  },
+
+  async createApiTask(taskData) {
+    const response = await api.post('/tasks', {
+      ...taskData,
+      is_api_task: true
+    });
+    return response.data;
+  },
+
+  async updateApiTask(id, taskData) {
+    const response = await api.put(`/tasks/${id}`, taskData);
+    return response.data;
+  },
+
   // Auth API methods (if needed)
   async login(credentials) {
     const response = await api.post('/auth/login', credentials);
@@ -78,6 +102,37 @@ const ApiService = {
 
   async getCurrentUser() {
     const response = await api.get('/auth/me');
+    return response.data;
+  },
+
+  // Users API
+  async getUsers() {
+    try {
+      const response = await api.get('/users');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      // Fallback for demo purposes if backend doesn't have /users yet
+      return [
+        { id: 1, email: 'admin@example.com', full_name: 'Administrator' },
+        { id: 2, email: 'user@example.com', full_name: 'Użytkownik Testowy' }
+      ];
+    }
+  },
+
+  // Comments API
+  async getComments(taskId) {
+    try {
+      const response = await api.get(`/tasks/${taskId}/comments`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      return []; // Return empty array if not implemented
+    }
+  },
+
+  async addComment(taskId, commentData) {
+    const response = await api.post(`/tasks/${taskId}/comments`, commentData);
     return response.data;
   },
 };
