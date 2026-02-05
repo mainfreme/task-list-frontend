@@ -14,9 +14,16 @@ const api = axios.create({
 // Request interceptor for adding auth tokens
 api.interceptors.request.use(
   (config) => {
-    const token = import.meta.env.VITE_JWT_TOKEN;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // First check localStorage for user token
+    const userToken = localStorage.getItem('auth_token');
+    if (userToken) {
+      config.headers.Authorization = `Bearer ${userToken}`;
+    } else {
+      // Fallback to env token (for backward compatibility)
+      const envToken = import.meta.env.VITE_JWT_TOKEN;
+      if (envToken) {
+        config.headers.Authorization = `Bearer ${envToken}`;
+      }
     }
     return config;
   },
@@ -31,13 +38,72 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Handle unauthorized access
-      console.error('Unauthorized access - check JWT token in .env file');
+      console.error('Unauthorized access - token may be invalid or expired');
+      // Clear invalid token if it exists
+      const path = window.location.pathname;
+      // Don't redirect if already on login/register pages
+      if (!path.includes('/login') && !path.includes('/register')) {
+        localStorage.removeItem('auth_token');
+        // Redirect to login
+        window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/') + 'login';
+      }
     }
     return Promise.reject(error);
   }
 );
 
 const ApiService = {
+  // =====================
+  // Authentication API - /v1/auth
+  // =====================
+
+  /**
+   * Login user
+   * POST /v1/auth/login
+   * @param {string} email - User email
+   * @param {string} password - User password
+   */
+  async login(email, password) {
+    const response = await api.post('/v1/auth/login', { email, password });
+    return response.data;
+  },
+
+  /**
+   * Register new user
+   * POST /v1/auth/register
+   * @param {string} name - User full name
+   * @param {string} email - User email
+   * @param {string} password - User password
+   * @param {string} passwordConfirmation - Password confirmation
+   */
+  async register(name, email, password, passwordConfirmation) {
+    const response = await api.post('/v1/auth/register', {
+      name,
+      email,
+      password,
+      password_confirmation: passwordConfirmation,
+    });
+    return response.data;
+  },
+
+  /**
+   * Logout user
+   * POST /v1/auth/logout
+   */
+  async logout() {
+    const response = await api.post('/v1/auth/logout');
+    return response.data;
+  },
+
+  /**
+   * Get current user data
+   * GET /v1/auth/me
+   */
+  async getMe() {
+    const response = await api.get('/v1/auth/me');
+    return response.data;
+  },
+
   // =====================
   // Tasks API - /v1/tasks
   // =====================
