@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, Button, Row, Col, Badge as BootstrapBadge } from 'react-bootstrap';
 import { RefreshCw, Wifi, WifiOff, Database } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import ApiTaskList from '../components/ApiTaskList';
 import ApiTaskModal from '../components/ApiTaskModal';
 import AddTaskApiTask from '../components/AddTaskApiTask';
 import ApiService from '../services/ApiService';
 import StatCard from '../components/common/StatCard';
 import AlertMessage from '../components/common/AlertMessage';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ZadaniaApi() {
     const [tasks, setTasks] = useState([]);
@@ -16,28 +18,31 @@ export default function ZadaniaApi() {
     const [lastCheck, setLastCheck] = useState(new Date());
     const [error, setError] = useState(null);
     const pollingIntervalRef = useRef(null);
+    
+    const { withAuthCheck, isAuthenticated } = useAuth();
+    const navigate = useNavigate();
 
-    useEffect(() => {
-        loadTasks();
-        startPolling();
-        return () => stopPolling();
-    }, []);
-
-    const loadTasks = async () => {
-        try {
+    const loadTasks = useCallback(async () => {
+        const result = await withAuthCheck(async () => {
             const response = await ApiService.getTasks();
-            // Handle both paginated response { data: [...] } and direct array
-            const apiTasks = response?.data || response || [];
-            setTasks(Array.isArray(apiTasks) ? apiTasks : []);
+            return response?.data || response || [];
+        });
+        
+        if (result.success) {
+            setTasks(Array.isArray(result.data) ? result.data : []);
             setLastCheck(new Date());
             setError(null);
-        } catch (error) {
-            console.error('Błąd podczas pobierania zadań:', error);
+        } else {
+            if (result.error?.includes('Session expired')) {
+                stopPolling();
+                navigate('/login');
+                return;
+            }
             setError('Nie udało się pobrać zadań z API.');
         }
-    };
+    }, [withAuthCheck, navigate]);
 
-    const startPolling = () => {
+    const startPolling = useCallback(() => {
         if (pollingIntervalRef.current) return;
         
         pollingIntervalRef.current = setInterval(() => {
@@ -45,7 +50,7 @@ export default function ZadaniaApi() {
         }, 30000); // 30 sekund
         
         setIsPolling(true);
-    };
+    }, [loadTasks]);
 
     const stopPolling = () => {
         if (pollingIntervalRef.current) {
@@ -55,20 +60,35 @@ export default function ZadaniaApi() {
         setIsPolling(false);
     };
 
+    useEffect(() => {
+        if (isAuthenticated) {
+            loadTasks();
+            startPolling();
+        }
+        return () => stopPolling();
+    }, [isAuthenticated, loadTasks, startPolling]);
+
     const handleTaskSelect = (task) => {
         setSelectedTask(task);
         setModalOpen(true);
     };
 
     const handleStatusChange = async (taskId, newStatus) => {
-        try {
-            // Use PATCH /v1/tasks/{id}/status endpoint
+        const result = await withAuthCheck(async () => {
             await ApiService.updateTaskStatus(taskId, newStatus);
+            return true;
+        });
+        
+        if (result.success) {
             setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
             setModalOpen(false);
             setSelectedTask(null);
-        } catch (error) {
-            console.error('Błąd podczas aktualizacji zadania:', error);
+        } else {
+            if (result.error?.includes('Session expired')) {
+                stopPolling();
+                navigate('/login');
+                return;
+            }
             setError('Błąd podczas aktualizacji statusu zadania.');
         }
     };

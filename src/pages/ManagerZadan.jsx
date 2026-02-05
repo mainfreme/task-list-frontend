@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Row, Col } from 'react-bootstrap';
 import { Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import TaskItem from '../components/task/TaskItem';
 import TaskDetails from '../components/task/TaskDetails';
 import TaskForm from '../components/task/TaskForm';
@@ -8,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import ApiService from '../services/ApiService';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import AlertMessage from '../components/common/AlertMessage';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ManagerZadan() {
     const [tasks, setTasks] = useState([]);
@@ -16,67 +18,105 @@ export default function ManagerZadan() {
     const [showForm, setShowForm] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    
+    const { withAuthCheck, isAuthenticated } = useAuth();
+    const navigate = useNavigate();
+
+    const loadData = useCallback(async () => {
+        setIsLoading(true);
+        const result = await withAuthCheck(async () => {
+            const response = await ApiService.getTasks();
+            return response?.data || response || [];
+        });
+        
+        if (result.success) {
+            setTasks(Array.isArray(result.data) ? result.data : []);
+            setError(null);
+        } else {
+            if (result.error?.includes('Session expired')) {
+                navigate('/login');
+                return;
+            }
+            setError('Błąd podczas pobierania zadań.');
+        }
+        setIsLoading(false);
+    }, [withAuthCheck, navigate]);
 
     useEffect(() => {
-        loadData();
-    }, []);
-    
-    const loadData = async () => {
-        setIsLoading(true);
-        try {
-            const response = await ApiService.getTasks();
-            // Handle both paginated response { data: [...] } and direct array
-            const taskData = response?.data || response || [];
-            setTasks(Array.isArray(taskData) ? taskData : []);
-            setError(null);
-        } catch (err) {
-            setError('Błąd podczas pobierania zadań.');
-            console.error(err);
-        } finally {
-            setIsLoading(false);
+        if (isAuthenticated) {
+            loadData();
         }
-    };
+    }, [isAuthenticated, loadData]);
 
     const handleSelectTask = (task) => {
         setSelectedTask(task);
     };
 
     const handleUpdateTask = async (taskId, updates) => {
-        try {
-            const updatedTask = await ApiService.updateTask(taskId, updates);
-            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updatedTask } : t));
+        const result = await withAuthCheck(async () => {
+            return await ApiService.updateTask(taskId, updates);
+        });
+        
+        if (result.success) {
+            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...result.data } : t));
             if (selectedTask && selectedTask.id === taskId) {
-                setSelectedTask(prev => ({ ...prev, ...updatedTask }));
+                setSelectedTask(prev => ({ ...prev, ...result.data }));
             }
-        } catch (err) {
-            setError('Błąd podczas aktualizacji zadana.');
+        } else {
+            if (result.error?.includes('Session expired')) {
+                navigate('/login');
+                return;
+            }
+            setError('Błąd podczas aktualizacji zadania.');
         }
     };
     
     const handleDeleteTask = async (taskId) => {
-        try {
+        const result = await withAuthCheck(async () => {
             await ApiService.deleteTask(taskId);
+            return true;
+        });
+        
+        if (result.success) {
             setTasks(prev => prev.filter(t => t.id !== taskId));
             if (selectedTask && selectedTask.id === taskId) {
                 setSelectedTask(null);
             }
-        } catch (err) {
+        } else {
+            if (result.error?.includes('Session expired')) {
+                navigate('/login');
+                return;
+            }
             setError('Błąd podczas usuwania zadania.');
         }
     };
 
     const handleSaveTask = async (formData) => {
-        try {
-            if (formData.id) { // Edycja
+        const result = await withAuthCheck(async () => {
+            if (formData.id) {
                 const { id, ...dataToUpdate } = formData;
-                await handleUpdateTask(id, dataToUpdate);
-            } else { // Tworzenie
-                const newTask = await ApiService.createTask(formData);
-                setTasks(prev => [newTask, ...prev]);
+                return await ApiService.updateTask(id, dataToUpdate);
+            } else {
+                return await ApiService.createTask(formData);
+            }
+        });
+        
+        if (result.success) {
+            if (formData.id) {
+                setTasks(prev => prev.map(t => t.id === formData.id ? { ...t, ...result.data } : t));
+                if (selectedTask && selectedTask.id === formData.id) {
+                    setSelectedTask(prev => ({ ...prev, ...result.data }));
+                }
+            } else {
+                setTasks(prev => [result.data, ...prev]);
             }
             setShowForm(false);
             setEditingTask(null);
-        } catch (err) {
+        } else {
+            if (result.error?.includes('Session expired')) {
+                navigate('/login');
+                return;
+            }
             setError('Błąd podczas zapisywania zadania.');
         }
     };

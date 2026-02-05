@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import ApiService from '../services/ApiService';
 
 const AuthContext = createContext(null);
@@ -16,6 +16,8 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => localStorage.getItem('auth_token'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const lastCheckRef = useRef(0);
+  const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
   // Check if user is authenticated on mount
   useEffect(() => {
@@ -26,6 +28,7 @@ export const AuthProvider = ({ children }) => {
           const response = await ApiService.getMe();
           setUser(response.user);
           setToken(storedToken);
+          lastCheckRef.current = Date.now();
         } catch (err) {
           // Token is invalid, clear it
           localStorage.removeItem('auth_token');
@@ -99,6 +102,55 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   }, []);
 
+  // Check if auth is still valid (can be called before actions)
+  const checkAuth = useCallback(async () => {
+    const storedToken = localStorage.getItem('auth_token');
+    
+    if (!storedToken) {
+      setUser(null);
+      setToken(null);
+      return false;
+    }
+
+    // Skip check if we checked recently
+    const now = Date.now();
+    if (now - lastCheckRef.current < CHECK_INTERVAL && user) {
+      return true;
+    }
+
+    try {
+      const response = await ApiService.getMe();
+      setUser(response.user);
+      lastCheckRef.current = now;
+      return true;
+    } catch (err) {
+      localStorage.removeItem('auth_token');
+      setToken(null);
+      setUser(null);
+      return false;
+    }
+  }, [user, CHECK_INTERVAL]);
+
+  // Wrapper for actions that require authentication
+  const withAuthCheck = useCallback(async (action) => {
+    const isValid = await checkAuth();
+    if (!isValid) {
+      return { success: false, error: 'Session expired. Please login again.' };
+    }
+    try {
+      const result = await action();
+      return { success: true, data: result };
+    } catch (err) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem('auth_token');
+        setToken(null);
+        setUser(null);
+        return { success: false, error: 'Session expired. Please login again.' };
+      }
+      throw err;
+    }
+  }, [checkAuth]);
+
   const isAuthenticated = !!token && !!user;
 
   const value = {
@@ -111,6 +163,8 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     clearError,
+    checkAuth,
+    withAuthCheck,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
