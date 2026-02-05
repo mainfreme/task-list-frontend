@@ -1,9 +1,16 @@
 import React from 'react';
-import { Layers, ClipboardList, Inbox } from 'lucide-react';
+import { Layers, ClipboardList, Inbox, LogOut, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Layout({ children, currentPageName }) {
+  const { user, logout, isAuthenticated } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
   return (
     <div className="min-vh-100 bg-light">
       <header className="bg-white border-bottom sticky-top z-index-20">
@@ -42,6 +49,23 @@ export default function Layout({ children, currentPageName }) {
                 </Link>
               </nav>
             </div>
+
+            {isAuthenticated && (
+              <div className="d-flex align-items-center gap-3">
+                <div className="d-flex align-items-center gap-2 text-secondary">
+                  <User size={18} />
+                  <span className="small">{user?.name || user?.email}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                  title="Wyloguj"
+                >
+                  <LogOut size={16} />
+                  <span className="d-none d-md-inline">Wyloguj</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
